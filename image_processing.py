@@ -355,99 +355,99 @@ if __name__ == "__main__":
     img_pub = rospy.Publisher('/color_image', sensor_msgs.msg.Image, queue_size=10)
     d_pub = rospy.Publisher('/distance', std_msgs.msg.Float32, queue_size=10)
     center_bb_sub = rospy.Subscriber('/center_boundingbox', geometry_msgs.msg.Point, bb_callback)
-    button_status  = rospy.Subscriber('/button_status ', std_msgs.msg.Int16, stt_callback)
+    # button_status  = rospy.Subscriber('/button_status ', std_msgs.msg.Int16, stt_callback)
     rospy.init_node('process_image', anonymous=True)
 
     while True:
-        if button_status == 0:
-            try:
-                print('i = ', iteration)
-                start_time = time.time()
+        # if button_status == 0:
+        try:
+            print('i = ', iteration)
+            start_time = time.time()
 
-                t0 = time.time()
-                # Wait for a coherent pair of frames: depth and color
-                frames = pipeline.wait_for_frames()
+            t0 = time.time()
+            # Wait for a coherent pair of frames: depth and color
+            frames = pipeline.wait_for_frames()
 
-                # Align the depth frame to color frame
-                aligned_frames = align.process(frames)
+            # Align the depth frame to color frame
+            aligned_frames = align.process(frames)
 
-                # Get aligned frames
-                depth_frame = aligned_frames.get_depth_frame()
-                color_frame = aligned_frames.get_color_frame()
+            # Get aligned frames
+            depth_frame = aligned_frames.get_depth_frame()
+            color_frame = aligned_frames.get_color_frame()
 
-                # Validate that both frames are valid
-                if not depth_frame or not color_frame:
-                    continue
+            # Validate that both frames are valid
+            if not depth_frame or not color_frame:
+                continue
 
-                depth_image_raw = np.asanyarray(depth_frame.get_data())
-                color_image_raw = np.asanyarray(color_frame.get_data())
+            depth_image_raw = np.asanyarray(depth_frame.get_data())
+            color_image_raw = np.asanyarray(color_frame.get_data())
 
-                # Rotate image
-                depth_image = cv2.rotate(depth_image_raw, cv2.ROTATE_90_CLOCKWISE)
-                color_image = cv2.rotate(color_image_raw, cv2.ROTATE_90_CLOCKWISE)
-                w, h = color_image.shape[1], color_image.shape[0]
-                original_image = color_image.copy()
+            # Rotate image
+            depth_image = cv2.rotate(depth_image_raw, cv2.ROTATE_90_CLOCKWISE)
+            color_image = cv2.rotate(color_image_raw, cv2.ROTATE_90_CLOCKWISE)
+            w, h = color_image.shape[1], color_image.shape[0]
+            original_image = color_image.copy()
 
-                # Public color image
-                ros_img = ros_numpy.msgify(sensor_msgs.msg.Image, color_image, encoding='bgr8')     # convert OpenCV image to ROS image msg
-                img_pub.publish(ros_img)
-                
-                pc.map_to(color_frame)
-                points = pc.calculate(depth_frame)
-                t0 = time.time() - t0
-                print(f'Time to get image: {round(t0, 2)}s')
+            # Public color image
+            ros_img = ros_numpy.msgify(sensor_msgs.msg.Image, color_image, encoding='bgr8')     # convert OpenCV image to ROS image msg
+            img_pub.publish(ros_img)
+            
+            pc.map_to(color_frame)
+            points = pc.calculate(depth_frame)
+            t0 = time.time() - t0
+            print(f'Time to get image: {round(t0, 2)}s')
 
-                # Convert pointcloud data to arrays
-                t1 = time.time()
-                v = points.get_vertices()
-                verts = np.asanyarray(v).view(np.float32).reshape(-1, 3).astype(np.float64)  # xyz
-                verts_filter = crop_point_cloud(verts, [0, 4])
+            # Convert pointcloud data to arrays
+            t1 = time.time()
+            v = points.get_vertices()
+            verts = np.asanyarray(v).view(np.float32).reshape(-1, 3).astype(np.float64)  # xyz
+            verts_filter = crop_point_cloud(verts, [0, 4])
 
-                # Convert numpy to open3d point cloud 
-                pcd.points = o3d.utility.Vector3dVector(verts_filter)
-                t1 = time.time() - t1
-                print(f'Time to convert to open3d data: {round(t1, 2)}s')
+            # Convert numpy to open3d point cloud 
+            pcd.points = o3d.utility.Vector3dVector(verts_filter)
+            t1 = time.time() - t1
+            print(f'Time to convert to open3d data: {round(t1, 2)}s')
 
-                # Each 20 iteration, crop the floor to reduce the run time
-                t2 = time.time()
-                if iteration == 0 or iteration % 20 == 0:
-                    floor, floor_plane = find_floor_plane(pcd)
-                else:
-                    floor = crop_floor(pcd, floor_plane)
-                t2 = time.time() - t2
-                print(f'Time to crop floor: {round(t2, 2)}s')
-                
-                # Convert the floor point clouds to image pixels
-                t3 = time.time()
-                blank_image = np.zeros((h, w, 3), np.uint8)
-                mask = point_cloud_to_image(point_cloud=floor, image=blank_image,
-                                            focal_dist_x=FOCAL_DIST_X, focal_dist_y=FOCAL_DIST_Y,
-                                            p_x=P_X, p_y=P_Y)
-                t3 = time.time() - t3
-                print(f'Time to calculate in pixel: {round(t3, 2)}s')
-                
-                # Preprocess image
-                t4 = time.time()
-                kernel = np.ones((5,5), np.uint8)
-                dilation_image = cv2.dilate(mask, kernel, iterations=3)
-                dilation_image[:, 0:5]       = [0,0,0]
-                dilation_image[:, (w-5):(w)] = [0,0,0]
-                dilation_image[0:5, :]       = [0,0,0]
-                dilation_image[(h-5):(h), :] = [0,0,0]
-                processed_image = add_image(background=color_image, logo=dilation_image)
+            # Each 20 iteration, crop the floor to reduce the run time
+            t2 = time.time()
+            if iteration == 0 or iteration % 20 == 0:
+                floor, floor_plane = find_floor_plane(pcd)
+            else:
+                floor = crop_floor(pcd, floor_plane)
+            t2 = time.time() - t2
+            print(f'Time to crop floor: {round(t2, 2)}s')
+            
+            # Convert the floor point clouds to image pixels
+            t3 = time.time()
+            blank_image = np.zeros((h, w, 3), np.uint8)
+            mask = point_cloud_to_image(point_cloud=floor, image=blank_image,
+                                        focal_dist_x=FOCAL_DIST_X, focal_dist_y=FOCAL_DIST_Y,
+                                        p_x=P_X, p_y=P_Y)
+            t3 = time.time() - t3
+            print(f'Time to calculate in pixel: {round(t3, 2)}s')
+            
+            # Preprocess image
+            t4 = time.time()
+            kernel = np.ones((5,5), np.uint8)
+            dilation_image = cv2.dilate(mask, kernel, iterations=3)
+            dilation_image[:, 0:5]       = [0,0,0]
+            dilation_image[:, (w-5):(w)] = [0,0,0]
+            dilation_image[0:5, :]       = [0,0,0]
+            dilation_image[(h-5):(h), :] = [0,0,0]
+            processed_image = add_image(background=color_image, logo=dilation_image)
 
-                edge_image = find_object_edge(dilation_image)
-                mask_image = get_contour(edge_image)
-                delta, xM = calculate_delta(mask_image)
-                t4 = time.time() - t4
-                print(f'Time to preprocessing image: {round(t4, 2)}s')
-                
-                print(f'Total time: {round(time.time() - start_time, 2)}s\n')
-                iteration += 1
+            edge_image = find_object_edge(dilation_image)
+            mask_image = get_contour(edge_image)
+            delta, xM = calculate_delta(mask_image)
+            t4 = time.time() - t4
+            print(f'Time to preprocessing image: {round(t4, 2)}s')
+            
+            print(f'Total time: {round(time.time() - start_time, 2)}s\n')
+            iteration += 1
 
-            except Exception as e:
-                print(e)
-                pass
+        except Exception as e:
+            print(e)
+            pass
 
     rospy.spin()
     # Stop streaming
