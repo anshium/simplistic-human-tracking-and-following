@@ -7,8 +7,6 @@ import geometry_msgs.msg
 
 import cv2
 import numpy as np
-import jetson.utils
-import jetson.inference
 from math import *
 
 FOCAL_DIST = 210.831
@@ -27,6 +25,12 @@ class Detector():
         self.is_person_pub = rospy.Publisher('/is_person', std_msgs.msg.Int16, queue_size=10)
         self.frame = None
 
+        # Load the pre-trained model
+        self.net = cv2.dnn.readNetFromCaffe(
+            'deploy.prototxt', 
+            'res10_300x300_ssd_iter_140000.caffemodel'
+        )
+
     def callback(self, image_data):
         """
         Callback function that is called each time a new image is received
@@ -42,48 +46,44 @@ class Detector():
         self.frame = None
 
     def detect(self):
-        # Covert the image from numpy array to jetson cuda
-        frame_cuda = jetson.utils.cudaFromNumpy(self.frame)
-        # Inference
-        detections = net.Detect(frame_cuda)
+        # Convert the image to a blob
+        blob = cv2.dnn.blobFromImage(self.frame, 1.0, (300, 300), (104.0, 177.0, 123.0))
+        self.net.setInput(blob)
+        detections = self.net.forward()
+
         # Create a Point message
         center_bb = geometry_msgs.msg.Point()
         is_person = 0
 
-        for detection  in detections:
-            class_id = detection.ClassID
-            class_name = net.GetClassDesc(class_id)
-            confidence = detection.Confidence
-            if class_name == 'person':
-                is_person = 1
-                # Get bounding box coordinates and convert them to int values
-                x, y, w, h = map(int, (detection.Left, detection.Top, detection.Width, detection.Height))
-                
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.5:
+                # Get bounding box coordinates
+                box = detections[0, 0, i, 3:7] * np.array([self.frame.shape[1], self.frame.shape[0], self.frame.shape[1], self.frame.shape[0]])
+                (x, y, x1, y1) = box.astype("int")
+
                 # Calculate the center of the bounding box
                 Cx = int(self.frame.shape[1] // 2)
                 Cy = int(self.frame.shape[0] // 2)
-                Cx_bb = int(x + w//2)
-                Cy_bb = int(y + h//2)
+                Cx_bb = int(x + (x1 - x) // 2)
+                Cy_bb = int(y + (y1 - y) // 2)
                 center_bb.x = Cx_bb
-                center_bb.y = Cy_bb - 80    # 80 is the distance from the center of the bounding box to the person to make sure the person is in front of the robot
+                center_bb.y = Cy_bb - 80  # 80 is the distance from the center of the bounding box to the person to make sure the person is in front of the robot
                 center_bb.z = 0
 
                 # Calculate the alpha value which is the angle between the robot and the object
-                alpha = -1*(degrees(asin((self.frame.shape[1]-Cx_bb-Cx) / sqrt(FOCAL_DIST**2 + (self.frame.shape[1]-Cx_bb-Cx)**2 + (Cy_bb-Cy)**2))))
+                alpha = -1 * (degrees(asin((self.frame.shape[1] - Cx_bb - Cx) / sqrt(FOCAL_DIST**2 + (self.frame.shape[1] - Cx_bb - Cx)**2 + (Cy_bb - Cy)**2))))
 
                 # Publish data
                 self.alpha_pub.publish(alpha)
                 self.center_bb_pub.publish(center_bb)
-                self.is_person_pub.publish(is_person)
-
+                is_person = 1
+        
         self.is_person_pub.publish(is_person)
 
 if __name__ == "__main__":
     rospy.init_node('detect', anonymous=True)
-    # load the object detection network
-    net = jetson.inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-
+    
     try:
         Detector()
         rospy.spin()
