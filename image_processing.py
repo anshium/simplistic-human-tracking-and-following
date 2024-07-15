@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
     
 import rospy
-import ros_numpy
+# import ros_numpy
 import std_msgs.msg
 import sensor_msgs.msg
 import geometry_msgs.msg
@@ -13,6 +13,7 @@ import open3d as o3d
 import pyrealsense2.pyrealsense2 as rs
 from math import *
 
+from cv_bridge import CvBridge
 
 HEIGHT_FRAME = 240
 WEIGHT_FRAME = 424
@@ -70,7 +71,7 @@ def initialize_camera():
 
     return pipeline, align, pointcloud 
 
-def find_floor_plane(point_cloud: o3d.geometry.PointCloud) -> tuple[o3d.geometry.PointCloud, np.ndarray]:
+def find_floor_plane(point_cloud: o3d.geometry.PointCloud): # -> tuple[o3d.geometry.PointCloud, np.ndarray]:
     """
     Returns the plane which contains the floor point cloud
 
@@ -103,7 +104,7 @@ def find_floor_plane(point_cloud: o3d.geometry.PointCloud) -> tuple[o3d.geometry
     return floor_plane, plane_model
 
 def crop_floor(point_cloud: o3d.geometry.PointCloud,
-                plane_model: np.ndarray) -> tuple[o3d.geometry.PointCloud, np.ndarray]:
+                plane_model: np.ndarray): # -> tuple[o3d.geometry.PointCloud, np.ndarray]:
     """
     Return the floor point cloud and its index
 
@@ -358,6 +359,11 @@ if __name__ == "__main__":
     # button_status  = rospy.Subscriber('/button_status ', std_msgs.msg.Int16, stt_callback)
     rospy.init_node('process_image', anonymous=True)
 
+    bridge = CvBridge()
+
+    if not hasattr(np, 'float'):
+        np.float = float
+
     while True:
         # if button_status == 0:
         try:
@@ -389,7 +395,7 @@ if __name__ == "__main__":
             original_image = color_image.copy()
 
             # Public color image
-            ros_img = ros_numpy.msgify(sensor_msgs.msg.Image, color_image, encoding='bgr8')     # convert OpenCV image to ROS image msg
+            ros_img = bridge.cv2_to_imgmsg(color_image, encoding='bgr8')     # convert OpenCV image to ROS image msg
             img_pub.publish(ros_img)
             
             pc.map_to(color_frame)
