@@ -360,6 +360,7 @@ if __name__ == "__main__":
     d_pub = rospy.Publisher('/distance', std_msgs.msg.Float32, queue_size=10)
     pc_pub = rospy.Publisher('/floor_point_cloud', PointCloud2, queue_size=10)
     cropped_pc_pub = rospy.Publisher('/cropped_floor_point_cloud', PointCloud2, queue_size=10)
+    mask_img_pub = rospy.Publisher('/mask_image', sensor_msgs.msg.Image, queue_size=10)
     center_bb_sub = rospy.Subscriber('/center_boundingbox', geometry_msgs.msg.Point, bb_callback)
     # button_status  = rospy.Subscriber('/button_status ', std_msgs.msg.Int16, stt_callback)
     rospy.init_node('process_image', anonymous=True)
@@ -462,6 +463,11 @@ if __name__ == "__main__":
             edge_image = find_object_edge(dilation_image)
             mask_image = get_contour(edge_image)
             delta, xM = calculate_delta(mask_image)
+            
+            # Publish mask image
+            mask_ros_img = bridge.cv2_to_imgmsg(dilation_image, encoding='mono8')  # convert OpenCV mask image to ROS image msg
+            mask_img_pub.publish(mask_ros_img)
+            
             t4 = time.time() - t4
             print(f'Time to preprocessing image: {round(t4, 2)}s')
             
