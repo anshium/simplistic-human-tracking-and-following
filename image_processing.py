@@ -388,9 +388,9 @@ if __name__ == "__main__":
             depth_image_raw = np.asanyarray(depth_frame.get_data())
             color_image_raw = np.asanyarray(color_frame.get_data())
 
-            # Rotate image
-            depth_image = cv2.rotate(depth_image_raw, cv2.ROTATE_90_CLOCKWISE)
-            color_image = cv2.rotate(color_image_raw, cv2.ROTATE_90_CLOCKWISE)
+            depth_image = depth_image_raw
+            color_image = color_image_raw
+            
             w, h = color_image.shape[1], color_image.shape[0]
             original_image = color_image.copy()
 
