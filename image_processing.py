@@ -359,6 +359,7 @@ if __name__ == "__main__":
     img_pub = rospy.Publisher('/color_image', sensor_msgs.msg.Image, queue_size=10)
     d_pub = rospy.Publisher('/distance', std_msgs.msg.Float32, queue_size=10)
     pc_pub = rospy.Publisher('/floor_point_cloud', PointCloud2, queue_size=10)
+    cropped_pc_pub = rospy.Publisher('/cropped_floor_point_cloud', PointCloud2, queue_size=10)
     center_bb_sub = rospy.Subscriber('/center_boundingbox', geometry_msgs.msg.Point, bb_callback)
     # button_status  = rospy.Subscriber('/button_status ', std_msgs.msg.Int16, stt_callback)
     rospy.init_node('process_image', anonymous=True)
@@ -433,6 +434,11 @@ if __name__ == "__main__":
             header.frame_id = 'map'
             pc2 = point_cloud2.create_cloud_xyz32(header, verts_filter)
             pc_pub.publish(pc2)
+            
+            # Publish cropped floor point cloud
+            floor_verts = np.asarray(floor.points)
+            cropped_pc2 = point_cloud2.create_cloud_xyz32(header, floor_verts)
+            cropped_pc_pub.publish(cropped_pc2)
             
             # Convert the floor point clouds to image pixels
             t3 = time.time()
