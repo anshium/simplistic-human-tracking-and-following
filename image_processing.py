@@ -6,6 +6,9 @@ import std_msgs.msg
 import sensor_msgs.msg
 import geometry_msgs.msg
 
+from sensor_msgs.msg import PointCloud2, PointField
+from sensor_msgs import point_cloud2
+
 import time
 import cv2
 import numpy as np
@@ -355,6 +358,7 @@ if __name__ == "__main__":
     delta_pub = rospy.Publisher('/delta', std_msgs.msg.Int16, queue_size=10)
     img_pub = rospy.Publisher('/color_image', sensor_msgs.msg.Image, queue_size=10)
     d_pub = rospy.Publisher('/distance', std_msgs.msg.Float32, queue_size=10)
+    pc_pub = rospy.Publisher('/floor_point_cloud', PointCloud2, queue_size=10)
     center_bb_sub = rospy.Subscriber('/center_boundingbox', geometry_msgs.msg.Point, bb_callback)
     # button_status  = rospy.Subscriber('/button_status ', std_msgs.msg.Int16, stt_callback)
     rospy.init_node('process_image', anonymous=True)
@@ -394,7 +398,7 @@ if __name__ == "__main__":
             w, h = color_image.shape[1], color_image.shape[0]
             original_image = color_image.copy()
 
-            # Public color image
+            # Publish color image
             ros_img = bridge.cv2_to_imgmsg(color_image, encoding='bgr8')     # convert OpenCV image to ROS image msg
             img_pub.publish(ros_img)
             
@@ -422,6 +426,13 @@ if __name__ == "__main__":
                 floor = crop_floor(pcd, floor_plane)
             t2 = time.time() - t2
             print(f'Time to crop floor: {round(t2, 2)}s')
+            
+            # Publish floor point cloud
+            header = std_msgs.msg.Header()
+            header.stamp = rospy.Time.now()
+            header.frame_id = 'map'
+            pc2 = point_cloud2.create_cloud_xyz32(header, verts_filter)
+            pc_pub.publish(pc2)
             
             # Convert the floor point clouds to image pixels
             t3 = time.time()
